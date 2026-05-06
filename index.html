@@ -177,16 +177,33 @@ body{color:var(--text);font-family:'Outfit',sans-serif;display:flex;flex-directi
 
 /* VISUAL */
 .ex-vis{
-  background:linear-gradient(135deg,#0d0d0d,#161616);
-  height:160px;display:flex;align-items:center;justify-content:center;
-  position:relative;font-size:68px;
+  background:#09090f;
+  border-bottom:1px solid var(--border);
+  padding:16px;
+  display:flex;
+  gap:16px;
+  align-items:center;
+  min-height:220px;
 }
-.ex-vis-overlay{
-  position:absolute;bottom:0;left:0;right:0;
-  background:linear-gradient(to top,rgba(0,0,0,.8),transparent);
-  padding:10px 13px;
-}
-.ex-vis-name{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--lime);text-transform:uppercase}
+.muscle-figures{display:flex;gap:14px;flex-shrink:0;}
+.muscle-fig{display:flex;flex-direction:column;align-items:center;gap:5px;}
+.muscle-fig-label{font-size:8px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;}
+.muscle-fig svg{width:85px;height:auto;}
+.muscle-legend{flex:1;display:flex;flex-direction:column;justify-content:center;gap:7px;}
+.muscle-legend-title{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:2px;}
+.muscle-legend-title.p{color:var(--lime);}
+.muscle-legend-title.s{color:var(--orange);}
+.muscle-legend-item{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--text);line-height:1.3;}
+.muscle-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.muscle-dot.p{background:var(--lime);box-shadow:0 0 6px var(--lime);}
+.muscle-dot.s{background:var(--orange);box-shadow:0 0 5px var(--orange);}
+.ex-vis-name{display:none;}
+.muscle-map{display:none;}
+.muscle-section-label{display:none;}
+.muscle-bar{display:none;}
+.muscle-bar-name{display:none;}
+.muscle-bar-track{display:none;}
+.muscle-bar-fill{display:none;}
 
 /* MUSCLES */
 .sec-block{padding:11px 13px;border-bottom:1px solid var(--border)}
@@ -904,11 +921,13 @@ function buildWorkout(){
       <div class="ex-card" id="ec_${ex.id}">
         <div class="ex-top" onclick="toggleEx('${ex.id}')">
           <div class="ex-n">${i+1}</div>
-          <div class="ex-info"><div class="ex-name">${ex.emoji} ${ex.name}</div><div class="ex-meta">${ex.sets}×${ex.reps}${ex.w?' · '+ex.w+'lb':''}</div></div>
+          <div class="ex-info"><div class="ex-name">${ex.name}</div><div class="ex-meta">${ex.sets}×${ex.reps}${ex.w?' · '+ex.w+'lb':''}</div></div>
           <div class="ex-chev">⌄</div>
         </div>
         <div class="ex-body">
-          <div class="ex-vis"><div>${ex.emoji}</div><div class="ex-vis-overlay"><div class="ex-vis-name">⚡ ${ex.name.toUpperCase()}</div></div></div>
+          <div class="ex-vis">
+            ${buildMuscleSVG(ex.primary||[], ex.secondary||[])}
+          </div>
           <div class="sec-block">
             <div class="sec-block-title">Muscles sollicités</div>
             <div class="mpills">
@@ -1267,6 +1286,249 @@ function renderHist(){
       </div>
       <div class="hi-pills"><span class="hpill">${w.sets} sets</span><span class="hpill">${w.sets?Math.round(w.volume/w.sets):0} lb/set</span></div>
     </div>`).join('');
+}
+
+// ===================================================
+// MUSCLE SVG BODY — Anatomical front + back view
+// ===================================================
+function buildMuscleSVG(primary=[], secondary=[]){
+  const NAME_MAP = {
+    'Quadriceps':'quads','Fessiers':'glutes','Ischio-jambiers':'hams',
+    'Mollets':'calves','Gastrocnémien':'calves','Soléaire':'calves',
+    'Pectoraux':'chest','Pectoraux supérieurs':'chest',
+    'Grand dorsal':'lats','Deltoïdes':'delts','Deltoïdes latéraux':'delts',
+    'Deltoïdes antérieurs':'delts','Deltoïdes postérieurs':'rdelts',
+    'Trapèze':'traps','Biceps':'biceps','Biceps brachial':'biceps',
+    'Triceps':'triceps','Avant-bras':'forearms','Brachioradialis':'forearms',
+    'Abdominaux':'abs','Core':'abs','Rhomboïdes':'rhomboids','Bas du dos':'lowerback',
+  };
+  const P = new Set((primary||[]).map(m=>NAME_MAP[m]).filter(Boolean));
+  const S = new Set((secondary||[]).map(m=>NAME_MAP[m]).filter(Boolean));
+  const c  = id => P.has(id)?'#c8ff00':S.has(id)?'ff6b00':'1a1a2e';
+  const fill = id => P.has(id)?'#c8ff00':S.has(id)?'#ff6b00':'#1e1e32';
+  const str  = id => P.has(id)?'#a8df00':S.has(id)?'#dd5500':'#2e2e4a';
+  const glow = id => P.has(id)?'drop-shadow(0 0 7px #c8ff00) drop-shadow(0 0 3px #c8ff00)':S.has(id)?'drop-shadow(0 0 5px #ff6b00)':'none';
+  const op   = id => P.has(id)?'1':S.has(id)?'0.9':'0.55';
+
+  const front = `<svg viewBox="0 0 160 380" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="hgrad" cx="50%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#30304a"/>
+      <stop offset="100%" stop-color="#111120"/>
+    </radialGradient>
+  </defs>
+
+  <!-- === SILHOUETTE BASE === -->
+  <!-- Head -->
+  <ellipse cx="80" cy="24" rx="18" ry="22" fill="#111120" stroke="#252540" stroke-width="1.5"/>
+  <!-- Neck -->
+  <path d="M71,43 Q71,56 80,58 Q89,56 89,43 L86,41 L74,41Z" fill="#111120" stroke="#252540" stroke-width="1"/>
+
+  <!-- Shoulders width bar -->
+  <path d="M24,74 Q80,64 136,74" stroke="#252540" stroke-width="1" fill="none"/>
+
+  <!-- Main torso silhouette -->
+  <path d="M36,72 C24,78 18,94 18,112 C18,130 22,148 28,162 C34,174 42,180 52,184 C60,187 80,188 80,188 C80,188 100,187 108,184 C118,180 126,174 132,162 C138,148 142,130 142,112 C142,94 136,78 124,72 C112,66 96,62 80,62 C64,62 48,66 36,72Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
+
+  <!-- Hip / pelvis -->
+  <path d="M52,184 Q66,196 80,197 Q94,196 108,184 C108,196 102,208 80,210 C58,208 52,196 52,184Z" fill="#111120" stroke="#252540" stroke-width="1"/>
+
+  <!-- Left leg silhouette -->
+  <path d="M52,196 C48,216 46,238 46,258 C46,278 48,296 50,308 C52,318 56,324 62,326 C68,328 73,324 76,316 C79,304 80,284 80,264 C80,244 78,224 74,206 C70,198 62,194 56,195Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
+  <!-- Right leg silhouette -->
+  <path d="M108,196 C112,216 114,238 114,258 C114,278 112,296 110,308 C108,318 104,324 98,326 C92,328 87,324 84,316 C81,304 80,284 80,264 C80,244 82,224 86,206 C90,198 98,194 104,195Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
+
+  <!-- Left arm silhouette -->
+  <path d="M24,76 C14,88 10,106 12,124 C14,138 20,148 28,152 C34,154 40,150 43,142 C46,132 44,114 40,98 C37,86 32,76 26,74Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
+  <!-- Right arm silhouette -->
+  <path d="M136,76 C146,88 150,106 148,124 C146,138 140,148 132,152 C126,154 120,150 117,142 C114,132 116,114 120,98 C123,86 128,76 134,74Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
+
+  <!-- Left forearm -->
+  <path d="M12,126 C10,142 12,160 16,172 C20,180 28,182 34,178 C40,172 42,158 40,144 C38,132 32,124 26,124Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
+  <!-- Right forearm -->
+  <path d="M148,126 C150,142 148,160 144,172 C140,180 132,182 126,178 C120,172 118,158 120,144 C122,132 128,124 134,124Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
+
+  <!-- Left hand -->
+  <ellipse cx="24" cy="184" rx="9" ry="12" fill="#111120" stroke="#252540" stroke-width="1"/>
+  <!-- Right hand -->
+  <ellipse cx="136" cy="184" rx="9" ry="12" fill="#111120" stroke="#252540" stroke-width="1"/>
+
+  <!-- Left foot -->
+  <ellipse cx="58" cy="332" rx="12" ry="6" fill="#111120" stroke="#252540" stroke-width="1"/>
+  <!-- Right foot -->
+  <ellipse cx="102" cy="332" rx="12" ry="6" fill="#111120" stroke="#252540" stroke-width="1"/>
+
+  <!-- === MUSCLE GROUPS FRONT === -->
+
+  <!-- TRAPS -->
+  <path d="M71,56 Q60,58 46,68 Q60,74 80,76 Q100,74 114,68 Q100,58 89,56 Q80,60 71,56Z"
+    fill="${fill('traps')}" opacity="${op('traps')}" stroke="${str('traps')}" stroke-width="0.8" style="filter:${glow('traps')}"/>
+
+  <!-- DELTS LEFT -->
+  <path d="M22,74 C14,80 12,92 14,104 C16,114 22,120 30,118 C38,116 42,106 40,96 C38,86 32,74 26,72Z"
+    fill="${fill('delts')}" opacity="${op('delts')}" stroke="${str('delts')}" stroke-width="0.8" style="filter:${glow('delts')}"/>
+  <!-- DELTS RIGHT -->
+  <path d="M138,74 C146,80 148,92 146,104 C144,114 138,120 130,118 C122,116 118,106 120,96 C122,86 128,74 134,72Z"
+    fill="${fill('delts')}" opacity="${op('delts')}" stroke="${str('delts')}" stroke-width="0.8" style="filter:${glow('delts')}"/>
+
+  <!-- CHEST LEFT -->
+  <path d="M36,74 C28,80 26,92 28,106 C30,116 38,122 50,124 C62,126 76,124 80,122 L80,76 C66,72 50,70 36,74Z"
+    fill="${fill('chest')}" opacity="${op('chest')}" stroke="${str('chest')}" stroke-width="0.8" style="filter:${glow('chest')}"/>
+  <!-- CHEST RIGHT -->
+  <path d="M124,74 C132,80 134,92 132,106 C130,116 122,122 110,124 C98,126 84,124 80,122 L80,76 C94,72 110,70 124,74Z"
+    fill="${fill('chest')}" opacity="${op('chest')}" stroke="${str('chest')}" stroke-width="0.8" style="filter:${glow('chest')}"/>
+  <!-- Chest divider -->
+  <path d="M80,74 L80,122" stroke="#0a0a18" stroke-width="2"/>
+  <!-- Chest bottom crease -->
+  <path d="M34,118 Q80,128 126,118" stroke="#0a0a18" stroke-width="1.5" fill="none"/>
+
+  <!-- LATS (visible front sides) -->
+  <path d="M22,100 C18,116 18,134 22,150 C26,162 32,170 36,174 C30,162 26,148 24,132 C22,116 22,102 22,100Z"
+    fill="${fill('lats')}" opacity="${op('lats')}" stroke="${str('lats')}" stroke-width="0.8" style="filter:${glow('lats')}"/>
+  <path d="M138,100 C142,116 142,134 138,150 C134,162 128,170 124,174 C130,162 134,148 136,132 C138,116 138,102 138,100Z"
+    fill="${fill('lats')}" opacity="${op('lats')}" stroke="${str('lats')}" stroke-width="0.8" style="filter:${glow('lats')}"/>
+
+  <!-- ABS 6-pack -->
+  <path d="M70,126 Q74,124 80,124 L80,136 Q74,137 70,136Z" fill="${fill('abs')}" opacity="${op('abs')}" stroke="${str('abs')}" stroke-width="0.8" rx="3" style="filter:${glow('abs')}"/>
+  <path d="M80,124 Q86,124 90,126 L90,136 Q86,137 80,136Z" fill="${fill('abs')}" opacity="${op('abs')}" stroke="${str('abs')}" stroke-width="0.8" style="filter:${glow('abs')}"/>
+  <path d="M70,138 Q74,137 80,137 L80,149 Q74,150 70,149Z" fill="${fill('abs')}" opacity="${op('abs')}" stroke="${str('abs')}" stroke-width="0.8" style="filter:${glow('abs')}"/>
+  <path d="M80,137 Q86,137 90,138 L90,149 Q86,150 80,149Z" fill="${fill('abs')}" opacity="${op('abs')}" stroke="${str('abs')}" stroke-width="0.8" style="filter:${glow('abs')}"/>
+  <path d="M70,151 Q74,150 80,150 L80,162 Q74,163 70,162Z" fill="${fill('abs')}" opacity="${op('abs')}" stroke="${str('abs')}" stroke-width="0.8" style="filter:${glow('abs')}"/>
+  <path d="M80,150 Q86,150 90,151 L90,162 Q86,163 80,162Z" fill="${fill('abs')}" opacity="${op('abs')}" stroke="${str('abs')}" stroke-width="0.8" style="filter:${glow('abs')}"/>
+  <path d="M80,122 L80,164" stroke="#0a0a18" stroke-width="1.5"/>
+
+  <!-- BICEPS LEFT -->
+  <path d="M14,102 C10,114 10,130 14,142 C18,150 26,152 32,148 C38,142 40,128 38,114 C36,102 30,94 24,94 C18,94 14,98 14,102Z"
+    fill="${fill('biceps')}" opacity="${op('biceps')}" stroke="${str('biceps')}" stroke-width="0.8" style="filter:${glow('biceps')}"/>
+  <!-- BICEPS RIGHT -->
+  <path d="M146,102 C150,114 150,130 146,142 C142,150 134,152 128,148 C122,142 120,128 122,114 C124,102 130,94 136,94 C142,94 146,98 146,102Z"
+    fill="${fill('biceps')}" opacity="${op('biceps')}" stroke="${str('biceps')}" stroke-width="0.8" style="filter:${glow('biceps')}"/>
+
+  <!-- FOREARMS LEFT -->
+  <path d="M12,146 C10,160 12,174 16,182 C20,188 28,188 34,184 C40,178 42,164 40,150 C36,140 28,136 22,138Z"
+    fill="${fill('forearms')}" opacity="${op('forearms')}" stroke="${str('forearms')}" stroke-width="0.8" style="filter:${glow('forearms')}"/>
+  <!-- FOREARMS RIGHT -->
+  <path d="M148,146 C150,160 148,174 144,182 C140,188 132,188 126,184 C120,178 118,164 120,150 C124,140 132,136 138,138Z"
+    fill="${fill('forearms')}" opacity="${op('forearms')}" stroke="${str('forearms')}" stroke-width="0.8" style="filter:${glow('forearms')}"/>
+
+  <!-- QUADS LEFT (4 heads visible) -->
+  <path d="M50,200 C44,220 42,244 44,264 C46,282 50,298 56,308 C62,316 70,318 76,314 C80,308 80,290 80,268 C80,246 78,226 74,210 C70,200 62,196 56,196 C52,196 50,198 50,200Z"
+    fill="${fill('quads')}" opacity="${op('quads')}" stroke="${str('quads')}" stroke-width="0.8" style="filter:${glow('quads')}"/>
+  <!-- Inner quad line -->
+  <path d="M62,200 C60,224 60,250 62,274 C64,292 68,308 72,314" stroke="#0a0a18" stroke-width="1.2" fill="none"/>
+  <!-- QUADS RIGHT -->
+  <path d="M110,200 C116,220 118,244 116,264 C114,282 110,298 104,308 C98,316 90,318 84,314 C80,308 80,290 80,268 C80,246 82,226 86,210 C90,200 98,196 104,196 C108,196 110,198 110,200Z"
+    fill="${fill('quads')}" opacity="${op('quads')}" stroke="${str('quads')}" stroke-width="0.8" style="filter:${glow('quads')}"/>
+  <path d="M98,200 C100,224 100,250 98,274 C96,292 92,308 88,314" stroke="#0a0a18" stroke-width="1.2" fill="none"/>
+
+  <!-- KNEES -->
+  <ellipse cx="62" cy="316" rx="14" ry="9" fill="#111120" stroke="#252540" stroke-width="1"/>
+  <ellipse cx="98" cy="316" rx="14" ry="9" fill="#111120" stroke="#252540" stroke-width="1"/>
+
+  <!-- CALVES LEFT -->
+  <path d="M48,322 C44,336 44,350 47,360 C50,368 56,372 62,370 C68,368 72,360 72,350 C72,338 70,326 66,320Z"
+    fill="${fill('calves')}" opacity="${op('calves')}" stroke="${str('calves')}" stroke-width="0.8" style="filter:${glow('calves')}"/>
+  <!-- CALVES RIGHT -->
+  <path d="M112,322 C116,336 116,350 113,360 C110,368 104,372 98,370 C92,368 88,360 88,350 C88,338 90,326 94,320Z"
+    fill="${fill('calves')}" opacity="${op('calves')}" stroke="${str('calves')}" stroke-width="0.8" style="filter:${glow('calves')}"/>
+  </svg>`;
+
+  const back = `<svg viewBox="0 0 160 380" xmlns="http://www.w3.org/2000/svg">
+  <!-- === SILHOUETTE BASE BACK === -->
+  <ellipse cx="80" cy="24" rx="18" ry="22" fill="#111120" stroke="#252540" stroke-width="1.5"/>
+  <path d="M71,43 Q71,56 80,58 Q89,56 89,43 L86,41 L74,41Z" fill="#111120" stroke="#252540" stroke-width="1"/>
+  <path d="M36,72 C24,78 18,94 18,112 C18,130 22,148 28,162 C34,174 42,180 52,184 C60,187 80,188 80,188 C80,188 100,187 108,184 C118,180 126,174 132,162 C138,148 142,130 142,112 C142,94 136,78 124,72 C112,66 96,62 80,62 C64,62 48,66 36,72Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
+  <path d="M52,184 Q66,196 80,197 Q94,196 108,184 C108,196 102,208 80,210 C58,208 52,196 52,184Z" fill="#111120" stroke="#252540" stroke-width="1"/>
+  <path d="M52,196 C48,216 46,238 46,258 C46,278 48,296 50,308 C52,318 56,324 62,326 C68,328 73,324 76,316 C79,304 80,284 80,264 C80,244 78,224 74,206 C70,198 62,194 56,195Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
+  <path d="M108,196 C112,216 114,238 114,258 C114,278 112,296 110,308 C108,318 104,324 98,326 C92,328 87,324 84,316 C81,304 80,284 80,264 C80,244 82,224 86,206 C90,198 98,194 104,195Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
+  <path d="M24,76 C14,88 10,106 12,124 C14,138 20,148 28,152 C34,154 40,150 43,142 C46,132 44,114 40,98 C37,86 32,76 26,74Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
+  <path d="M136,76 C146,88 150,106 148,124 C146,138 140,148 132,152 C126,154 120,150 117,142 C114,132 116,114 120,98 C123,86 128,76 134,74Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
+  <path d="M12,126 C10,142 12,160 16,172 C20,180 28,182 34,178 C40,172 42,158 40,144 C38,132 32,124 26,124Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
+  <path d="M148,126 C150,142 148,160 144,172 C140,180 132,182 126,178 C120,172 118,158 120,144 C122,132 128,124 134,124Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
+  <ellipse cx="24" cy="184" rx="9" ry="12" fill="#111120" stroke="#252540" stroke-width="1"/>
+  <ellipse cx="136" cy="184" rx="9" ry="12" fill="#111120" stroke="#252540" stroke-width="1"/>
+  <ellipse cx="58" cy="332" rx="12" ry="6" fill="#111120" stroke="#252540" stroke-width="1"/>
+  <ellipse cx="102" cy="332" rx="12" ry="6" fill="#111120" stroke="#252540" stroke-width="1"/>
+
+  <!-- === MUSCLE GROUPS BACK === -->
+
+  <!-- REAR DELTS LEFT -->
+  <path d="M22,74 C14,80 12,92 14,104 C16,114 22,120 30,118 C38,116 42,106 40,96 C38,86 32,74 26,72Z"
+    fill="${fill('rdelts')}" opacity="${op('rdelts')}" stroke="${str('rdelts')}" stroke-width="0.8" style="filter:${glow('rdelts')}"/>
+  <!-- REAR DELTS RIGHT -->
+  <path d="M138,74 C146,80 148,92 146,104 C144,114 138,120 130,118 C122,116 118,106 120,96 C122,86 128,74 134,72Z"
+    fill="${fill('rdelts')}" opacity="${op('rdelts')}" stroke="${str('rdelts')}" stroke-width="0.8" style="filter:${glow('rdelts')}"/>
+
+  <!-- TRAPS (large back traps) -->
+  <path d="M71,56 Q56,58 44,70 Q52,80 80,84 Q108,80 116,70 Q104,58 89,56 Q80,60 71,56Z"
+    fill="${fill('traps')}" opacity="${op('traps')}" stroke="${str('traps')}" stroke-width="0.8" style="filter:${glow('traps')}"/>
+
+  <!-- RHOMBOIDS / UPPER BACK -->
+  <path d="M44,84 Q62,80 80,80 Q98,80 116,84 Q116,104 108,112 Q94,118 80,118 Q66,118 52,112 Q44,104 44,84Z"
+    fill="${fill('rhomboids')}" opacity="${op('rhomboids')}" stroke="${str('rhomboids')}" stroke-width="0.8" style="filter:${glow('rhomboids')}"/>
+
+  <!-- LATS LEFT -->
+  <path d="M22,96 C18,112 18,132 22,150 C26,164 34,174 42,178 C36,168 30,154 26,138 C22,122 20,108 22,96Z"
+    fill="${fill('lats')}" opacity="${op('lats')}" stroke="${str('lats')}" stroke-width="0.8" style="filter:${glow('lats')}"/>
+  <!-- LATS RIGHT -->
+  <path d="M138,96 C142,112 142,132 138,150 C134,164 126,174 118,178 C124,168 130,154 134,138 C138,122 140,108 138,96Z"
+    fill="${fill('lats')}" opacity="${op('lats')}" stroke="${str('lats')}" stroke-width="0.8" style="filter:${glow('lats')}"/>
+
+  <!-- LOWER BACK -->
+  <path d="M54,144 Q66,138 80,138 Q94,138 106,144 Q108,162 104,172 Q94,182 80,184 Q66,182 56,172 Q52,162 54,144Z"
+    fill="${fill('lowerback')}" opacity="${op('lowerback')}" stroke="${str('lowerback')}" stroke-width="0.8" style="filter:${glow('lowerback')}"/>
+  <!-- Spine -->
+  <line x1="80" y1="58" x2="80" y2="184" stroke="#0a0a18" stroke-width="2"/>
+
+  <!-- TRICEPS LEFT -->
+  <path d="M14,102 C10,114 10,130 14,142 C18,150 26,152 32,148 C38,142 40,128 38,114 C36,102 30,94 24,94 C18,94 14,98 14,102Z"
+    fill="${fill('triceps')}" opacity="${op('triceps')}" stroke="${str('triceps')}" stroke-width="0.8" style="filter:${glow('triceps')}"/>
+  <!-- TRICEPS RIGHT -->
+  <path d="M146,102 C150,114 150,130 146,142 C142,150 134,152 128,148 C122,142 120,128 122,114 C124,102 130,94 136,94 C142,94 146,98 146,102Z"
+    fill="${fill('triceps')}" opacity="${op('triceps')}" stroke="${str('triceps')}" stroke-width="0.8" style="filter:${glow('triceps')}"/>
+
+  <!-- FOREARMS BACK LEFT -->
+  <path d="M12,146 C10,160 12,174 16,182 C20,188 28,188 34,184 C40,178 42,164 40,150 C36,140 28,136 22,138Z"
+    fill="${fill('forearms')}" opacity="${op('forearms')}" stroke="${str('forearms')}" stroke-width="0.8" style="filter:${glow('forearms')}"/>
+  <!-- FOREARMS BACK RIGHT -->
+  <path d="M148,146 C150,160 148,174 144,182 C140,188 132,188 126,184 C120,178 118,164 120,150 C124,140 132,136 138,138Z"
+    fill="${fill('forearms')}" opacity="${op('forearms')}" stroke="${str('forearms')}" stroke-width="0.8" style="filter:${glow('forearms')}"/>
+
+  <!-- GLUTES -->
+  <path d="M50,196 C46,210 46,226 50,236 C54,244 62,248 72,246 C78,244 80,238 80,232 C80,220 76,206 70,198 C64,192 56,192 50,196Z"
+    fill="${fill('glutes')}" opacity="${op('glutes')}" stroke="${str('glutes')}" stroke-width="0.8" style="filter:${glow('glutes')}"/>
+  <path d="M110,196 C114,210 114,226 110,236 C106,244 98,248 88,246 C82,244 80,238 80,232 C80,220 84,206 90,198 C96,192 104,192 110,196Z"
+    fill="${fill('glutes')}" opacity="${op('glutes')}" stroke="${str('glutes')}" stroke-width="0.8" style="filter:${glow('glutes')}"/>
+  <line x1="80" y1="192" x2="80" y2="246" stroke="#0a0a18" stroke-width="1.5"/>
+
+  <!-- HAMSTRINGS LEFT -->
+  <path d="M50,244 C46,260 44,278 46,296 C48,310 54,320 62,322 C70,322 76,314 78,302 C80,288 80,268 78,252 C76,238 70,230 62,230 C56,230 52,236 50,244Z"
+    fill="${fill('hams')}" opacity="${op('hams')}" stroke="${str('hams')}" stroke-width="0.8" style="filter:${glow('hams')}"/>
+  <!-- HAMSTRINGS RIGHT -->
+  <path d="M110,244 C114,260 116,278 114,296 C112,310 106,320 98,322 C90,322 84,314 82,302 C80,288 80,268 82,252 C84,238 90,230 98,230 C104,230 108,236 110,244Z"
+    fill="${fill('hams')}" opacity="${op('hams')}" stroke="${str('hams')}" stroke-width="0.8" style="filter:${glow('hams')}"/>
+
+  <!-- KNEES BACK -->
+  <ellipse cx="62" cy="322" rx="14" ry="9" fill="#111120" stroke="#252540" stroke-width="1"/>
+  <ellipse cx="98" cy="322" rx="14" ry="9" fill="#111120" stroke="#252540" stroke-width="1"/>
+
+  <!-- CALVES BACK LEFT -->
+  <path d="M46,330 C42,344 43,358 47,366 C51,374 59,376 65,372 C71,366 73,352 70,338 C68,328 62,322 56,324Z"
+    fill="${fill('calves')}" opacity="${op('calves')}" stroke="${str('calves')}" stroke-width="0.8" style="filter:${glow('calves')}"/>
+  <!-- CALVES BACK RIGHT -->
+  <path d="M114,330 C118,344 117,358 113,366 C109,374 101,376 95,372 C89,366 87,352 90,338 C92,328 98,322 104,324Z"
+    fill="${fill('calves')}" opacity="${op('calves')}" stroke="${str('calves')}" stroke-width="0.8" style="filter:${glow('calves')}"/>
+  </svg>`;
+
+  return `
+    <div class="muscle-figures">
+      <div class="muscle-fig"><div class="muscle-fig-label">AVANT</div>${front}</div>
+      <div class="muscle-fig"><div class="muscle-fig-label">ARRIÈRE</div>${back}</div>
+    </div>
+    <div class="muscle-legend">
+      ${primary.length?`<div class="muscle-legend-title p">● PRIMAIRES</div>${primary.map(m=>`<div class="muscle-legend-item"><span class="muscle-dot p"></span>${m}</div>`).join('')}`:''}
+      ${secondary.length?`<div class="muscle-legend-title s" style="margin-top:10px">○ SECONDAIRES</div>${secondary.map(m=>`<div class="muscle-legend-item"><span class="muscle-dot s"></span>${m}</div>`).join('')}`:''}
+    </div>`;
 }
 
 // ===================================================
