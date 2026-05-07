@@ -523,6 +523,9 @@ body{color:var(--text);font-family:'Outfit',sans-serif;display:flex;flex-directi
       <div class="msg coach"><div class="msg-from">NUTRITIONNISTE</div>Salut Jonathan ! Je suis ton nutritionniste IA. Ton objectif recomposition nécessite 2 150 kcal/jour avec 160g de protéines. Pose-moi n'importe quelle question sur ton alimentation — recettes, substitutions, timing des repas, suppléments. Je suis là !</div>
     </div>
     <div class="chat-inp-row">
+      <label style="width:36px;height:36px;background:var(--s3);border:1px solid var(--border);border-radius:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:16px" title="Envoyer une image">
+        📷<input type="file" accept="image/*" style="display:none" onchange="handleNutriImage(this)">
+      </label>
       <input class="chat-inp" id="nutriInp" placeholder="Ex: que manger avant la gym?" onkeydown="if(event.key==='Enter')sendNutri()">
       <button class="chat-send" onclick="sendNutri()">↑</button>
     </div>
@@ -540,7 +543,10 @@ body{color:var(--text);font-family:'Outfit',sans-serif;display:flex;flex-directi
       <div class="tmsg coach"><div class="tmsg-from">COACH</div>Salut Jonathan ! 32 ans, 150lb, 14.8% gras — belle base pour la recomposition. Ton objectif : épaules larges + ventre plat en 6-9 mois. Pose-moi tes questions sur l'entraînement, les poids, ou envoie tes stats Renpho pour une analyse mise à jour !</div>
     </div>
     <div class="tchat-inp-row">
-      <input class="tchat-inp" id="coachInp" placeholder="Question sur ton entraînement..." onkeydown="if(event.key==='Enter')sendCoach()">
+      <label style="width:36px;height:36px;background:var(--s3);border:1px solid var(--border);border-radius:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:16px" title="Envoyer une image">
+        📷<input type="file" accept="image/*" style="display:none" onchange="handleCoachImage(this)">
+      </label>
+      <input class="tchat-inp" id="coachInp" placeholder="Question ou envoie une image Renpho..." onkeydown="if(event.key==='Enter')sendCoach()">
       <button class="tchat-send" onclick="sendCoach()">↑</button>
     </div>
   </div>
@@ -1127,26 +1133,44 @@ function renderMeals(){
 
 function toggleMeal(el){el.classList.toggle('open')}
 
-async function sendNutri(){
+async function sendNutri(imageData){
   const inp=document.getElementById('nutriInp');
-  const msg=inp.value.trim();if(!msg)return;inp.value='';
-  appendNutri('user',msg);
-  nutriHistory.push({role:'user',content:msg});
+  const msg=inp.value.trim();
+  if(!msg && !imageData) return;
+  const displayMsg = imageData ? (msg || '📸 Image envoyée') : msg;
+  inp.value='';
+  appendNutri('user', displayMsg);
+  nutriHistory.push({role:'user',content: msg || 'Analyse cette image'});
   const p=profile;
   const sys=`Tu es un nutritionniste expert, bienveillant et pratique. Tu parles français.
-Profil: Jonathan, 32 ans, 150.6lb, 174cm, 14.8% gras, objectif recomposition athlétique.
-Cibles: 2150 kcal/jour, 160g protéines, 215g glucides, 72g lipides. BMR: 1635 kcal.
+Profil: ${p.name||'Jonathan'}, ${p.age||32} ans, ${p.weight||150.6}lb, ${p.height||174}cm, ${p.fat||14.8}% gras, objectif recomposition athlétique.
+Cibles: 2150 kcal/jour, 160g protéines, 215g glucides, 72g lipides. BMR: ${p.bmr||1635} kcal.
 Réponds en 3-4 phrases max. Sois concret, donne des exemples de vrais aliments. Pas de discours — des conseils actionnables.`;
   const id='nm_'+Date.now();
   appendNutri('coach','<div class="dots"><span></span><span></span><span></span></div>',id);
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,messages:nutriHistory})});
+    const payload = {messages: nutriHistory, system: sys};
+    if(imageData) payload.image = imageData;
+    const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const data=await res.json();
-    const text=data.content?.find(b=>b.type==='text')?.text||'Erreur.';
+    const text=data.text||'Erreur.';
     nutriHistory.push({role:'assistant',content:text});
     document.getElementById(id).innerHTML=`<div class="msg-from">NUTRITIONNISTE</div>${text}`;
   }catch(e){document.getElementById(id).innerHTML='<div class="msg-from">NUTRITIONNISTE</div>Erreur de connexion.';}
   const c=document.getElementById('nutriChat');c.scrollTop=c.scrollHeight;
+}
+
+async function handleNutriImage(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const base64 = e.target.result.split(',')[1];
+    const mediaType = file.type || 'image/jpeg';
+    await sendNutri({data: base64, mediaType});
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
 }
 
 function appendNutri(role,html,id){
@@ -1156,28 +1180,46 @@ function appendNutri(role,html,id){
   c.appendChild(d);c.scrollTop=c.scrollHeight;
 }
 
-async function sendCoach(){
+async function sendCoach(imageData){
   const inp=document.getElementById('coachInp');
-  const msg=inp.value.trim();if(!msg)return;inp.value='';
-  appendCoach('user',msg);
-  coachHistory.push({role:'user',content:msg});
+  const msg=inp.value.trim();
+  if(!msg && !imageData) return;
+  const displayMsg = imageData ? (msg || '📸 Screenshot Renpho envoyé') : msg;
+  inp.value='';
+  appendCoach('user', displayMsg);
+  coachHistory.push({role:'user',content: msg || 'Analyse cette image Renpho'});
   const p=profile;
   const recent=workoutLog.slice(0,5).map(w=>`${w.date}: ${w.dayName} — ${w.volume}lb volume`).join('\n');
   const sys=`Tu es un coach de musculation expert, direct et motivant. Tu parles français.
-Jonathan: 32 ans, 150.6lb, 174cm, 14.8% gras, 122lb muscle, âge métabolique 28, BMR 1635 kcal. Ecto-mésomorphe. Débutant <1 an. Objectif: physique athlétique naturel — épaules larges, ventre plat, forme sous le t-shirt. Pas bodybuilder.
+Jonathan: ${p.age||32} ans, ${p.weight||150.6}lb, ${p.height||174}cm, ${p.fat||14.8}% gras, ${p.muscle||122}lb muscle, âge métabolique 28, BMR ${p.bmr||1635} kcal. Ecto-mésomorphe. Débutant <1 an. Objectif: physique athlétique naturel — épaules larges, ventre plat, forme sous le t-shirt. Pas bodybuilder.
 Programme: 4 jours gym (épaules+dos / poitrine+bras / jambes / dos+core) + HIIT maison jours de repos. 1h par séance.
 Séances récentes: ${recent||'Aucune encore.'}.
-Réponds en 3-4 phrases. Direct, concret, motivant. Si tu reçois des stats Renpho, analyse-les et ajuste les recommandations.`;
+Réponds en 3-4 phrases. Direct, concret, motivant. Si tu reçois une image Renpho, analyse les stats et ajuste les recommandations.`;
   const id='cm_'+Date.now();
   appendCoach('coach','<div class="dots"><span></span><span></span><span></span></div>',id);
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,messages:coachHistory})});
+    const payload = {messages: coachHistory, system: sys};
+    if(imageData) payload.image = imageData;
+    const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const data=await res.json();
-    const text=data.content?.find(b=>b.type==='text')?.text||'Erreur.';
+    const text=data.text||'Erreur.';
     coachHistory.push({role:'assistant',content:text});
     document.getElementById(id).innerHTML=`<div class="tmsg-from">COACH</div>${text}`;
   }catch(e){document.getElementById(id).innerHTML='<div class="tmsg-from">COACH</div>Erreur de connexion.';}
   const c=document.getElementById('coachChat');c.scrollTop=c.scrollHeight;
+}
+
+async function handleCoachImage(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const base64 = e.target.result.split(',')[1];
+    const mediaType = file.type || 'image/jpeg';
+    await sendCoach({data: base64, mediaType});
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
 }
 
 function appendCoach(role,html,id){
@@ -1211,9 +1253,9 @@ Sets logués:\n${sData.join('\n')}
 Muscles: ${ex.primary.join(', ')}
 Analyse en 3-4 phrases: est-ce un bon poids pour ce niveau ? Observation sur la performance ? Recommandation pour la prochaine fois ? Réponds en français, direct et concret.`;
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
+    const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
-    txt.textContent=data.content?.find(b=>b.type==='text')?.text||'Erreur.';
+    txt.textContent=data.text||'Erreur.';
   }catch(e){txt.textContent='Erreur de connexion.';}
 }
 
@@ -1289,241 +1331,69 @@ function renderHist(){
 }
 
 // ===================================================
-// MUSCLE SVG BODY — Anatomical front + back view
+// MUSCLE HIGHLIGHTER — body-highlighter v3 integrated
 // ===================================================
+const BodyHL = (function() { const exports = {};const e={TRAPEZIUS:"trapezius",UPPER_BACK:"upper-back",LOWER_BACK:"lower-back",CHEST:"chest",BICEPS:"biceps",TRICEPS:"triceps",FOREARM:"forearm",BACK_DELTOIDS:"back-deltoids",FRONT_DELTOIDS:"front-deltoids",ABS:"abs",OBLIQUES:"obliques",ABDUCTOR:"adductor",ABDUCTORS:"abductors",HAMSTRING:"hamstring",QUADRICEPS:"quadriceps",CALVES:"calves",GLUTEAL:"gluteal",HEAD:"head",NECK:"neck",KNEES:"knees",LEFT_SOLEUS:"left-soleus",RIGHT_SOLEUS:"right-soleus"},d={POSTERIOR:"posterior",ANTERIOR:"anterior"},P=[{muscle:e.CHEST,svgPoints:["51.8367347 41.6326531 51.0204082 55.1020408 57.9591837 57.9591837 67.755102 55.5102041 70.6122449 47.3469388 62.0408163 41.6326531 ","29.7959184 46.5306122 31.4285714 55.5102041 40.8163265 57.9591837 48.1632653 55.1020408 47.755102 42.0408163 37.5510204 42.0408163"]},{muscle:e.OBLIQUES,svgPoints:["68.5714286 63.2653061 67.3469388 57.1428571 58.7755102 59.5918367 60 64.0816327 60.4081633 83.2653061 65.7142857 78.7755102 66.5306122 69.7959184","33.877551 78.3673469 33.0612245 71.8367347 31.0204082 63.2653061 32.244898 57.1428571 40.8163265 59.1836735 39.1836735 63.2653061 39.1836735 83.6734694"]},{muscle:e.ABS,svgPoints:["56.3265306 59.1836735 57.9591837 64.0816327 58.3673469 77.9591837 58.3673469 92.6530612 56.3265306 98.3673469 55.1020408 104.081633 51.4285714 107.755102 51.0204082 84.4897959 50.6122449 67.3469388 51.0204082 57.1428571","43.6734694 58.7755102 48.5714286 57.1428571 48.9795918 67.3469388 48.5714286 84.4897959 48.1632653 107.346939 44.4897959 103.673469 40.8163265 91.4285714 40.8163265 78.3673469 41.2244898 64.4897959"]},{muscle:e.BICEPS,svgPoints:["16.7346939 68.1632653 17.9591837 71.4285714 22.8571429 66.122449 28.9795918 53.877551 27.755102 49.3877551 20.4081633 55.9183673","71.4285714 49.3877551 70.2040816 54.6938776 76.3265306 66.122449 81.6326531 71.8367347 82.8571429 68.9795918 78.7755102 55.5102041"]},{muscle:e.TRICEPS,svgPoints:["69.3877551 55.5102041 69.3877551 61.6326531 75.9183673 72.6530612 77.5510204 70.2040816 75.5102041 67.3469388","22.4489796 69.3877551 29.7959184 55.5102041 29.7959184 60.8163265 22.8571429 73.0612245"]},{muscle:e.NECK,svgPoints:["55.5102041 23.6734694 50.6122449 33.4693878 50.6122449 39.1836735 61.6326531 40 70.6122449 44.8979592 69.3877551 36.7346939 63.2653061 35.1020408 58.3673469 30.6122449","28.9795918 44.8979592 30.2040816 37.1428571 36.3265306 35.1020408 41.2244898 30.2040816 44.4897959 24.4897959 48.9795918 33.877551 48.5714286 39.1836735 37.9591837 39.5918367"]},{muscle:e.FRONT_DELTOIDS,svgPoints:["78.3673469 53.0612245 79.5918367 47.755102 79.1836735 41.2244898 75.9183673 37.9591837 71.0204082 36.3265306 72.244898 42.8571429 71.4285714 47.3469388","28.1632653 47.3469388 21.2244898 53.0612245 20 47.755102 20.4081633 40.8163265 24.4897959 37.1428571 28.5714286 37.1428571 26.9387755 43.2653061"]},{muscle:e.HEAD,svgPoints:["42.4489796 2.85714286 40 11.8367347 42.0408163 19.5918367 46.122449 23.2653061 49.7959184 25.3061224 54.6938776 22.4489796 57.5510204 19.1836735 59.1836735 10.2040816 57.1428571 2.44897959 49.7959184 0"]},{muscle:e.ABDUCTORS,svgPoints:["52.6530612 110.204082 54.2857143 124.897959 60 110.204082 62.0408163 100 64.8979592 94.2857143 60 92.6530612 56.7346939 104.489796","47.755102 110.612245 44.8979592 125.306122 42.0408163 115.918367 40.4081633 113.061224 39.5918367 107.346939 37.9591837 102.44898 34.6938776 93.877551 39.5918367 92.244898 41.6326531 99.1836735 43.6734694 105.306122"]},{muscle:e.QUADRICEPS,svgPoints:["34.6938776 98.7755102 37.1428571 108.163265 37.1428571 127.755102 34.2857143 137.142857 31.0204082 132.653061 29.3877551 120 28.1632653 111.428571 29.3877551 100.816327 32.244898 94.6938776","63.2653061 105.714286 64.4897959 100 66.9387755 94.6938776 70.2040816 101.22449 71.0204082 111.836735 68.1632653 133.061224 65.3061224 137.55102 62.4489796 128.571429 62.0408163 111.428571","38.7755102 129.387755 38.3673469 112.244898 41.2244898 118.367347 44.4897959 129.387755 42.8571429 135.102041 40 146.122449 36.3265306 146.530612 35.5102041 140","59.5918367 145.714286 55.5102041 128.979592 60.8163265 113.877551 61.2244898 130.204082 64.0816327 139.591837 62.8571429 146.530612","32.6530612 138.367347 26.5306122 145.714286 25.7142857 136.734694 25.7142857 127.346939 26.9387755 114.285714 29.3877551 133.469388","71.8367347 113.061224 73.877551 124.081633 73.877551 140.408163 72.6530612 145.714286 66.5306122 138.367347 70.2040816 133.469388"]},{muscle:e.KNEES,svgPoints:["33.877551 140 34.6938776 143.265306 35.5102041 147.346939 36.3265306 151.020408 35.1020408 156.734694 29.7959184 156.734694 27.3469388 152.653061 27.3469388 147.346939 30.2040816 144.081633","65.7142857 140 72.244898 147.755102 72.244898 152.244898 69.7959184 157.142857 64.8979592 156.734694 62.8571429 151.020408"]},{muscle:e.CALVES,svgPoints:["71.4285714 160.408163 73.4693878 153.469388 76.7346939 161.22449 79.5918367 167.755102 78.3673469 187.755102 79.5918367 195.510204 74.6938776 195.510204","24.8979592 194.693878 27.755102 164.897959 28.1632653 160.408163 26.122449 154.285714 24.8979592 157.55102 22.4489796 161.632653 20.8163265 167.755102 22.0408163 188.163265 20.8163265 195.510204","72.6530612 195.102041 69.7959184 159.183673 65.3061224 158.367347 64.0816327 162.44898 64.0816327 165.306122 65.7142857 177.142857","35.5102041 158.367347 35.9183673 162.44898 35.9183673 166.938776 35.1020408 172.244898 35.1020408 176.734694 32.244898 182.040816 30.6122449 187.346939 26.9387755 194.693878 27.3469388 187.755102 28.1632653 180.408163 28.5714286 175.510204 28.9795918 169.795918 29.7959184 164.081633 30.2040816 158.77551"]},{muscle:e.FOREARM,svgPoints:["6.12244898 88.5714286 10.2040816 75.1020408 14.6938776 70.2040816 16.3265306 74.2857143 19.1836735 73.4693878 4.48979592 97.5510204 0 100","84.4897959 69.7959184 83.2653061 73.4693878 80 73.0612245 95.1020408 98.3673469 100 100.408163 93.4693878 89.3877551 89.7959184 76.3265306","77.5510204 72.244898 77.5510204 77.5510204 80.4081633 84.0816327 85.3061224 89.7959184 92.244898 101.22449 94.6938776 99.5918367","6.93877551 101.22449 13.4693878 90.6122449 18.7755102 84.0816327 21.6326531 77.1428571 21.2244898 71.8367347 4.89795918 98.7755102"]}],T=[{muscle:e.HEAD,svgPoints:["50.6382979 0 45.9574468 0.85106383 40.8510638 5.53191489 40.4255319 12.7659574 45.106383 20 55.7446809 20 59.1489362 13.6170213 59.5744681 4.68085106 55.7446809 1.27659574"]},{muscle:e.TRAPEZIUS,svgPoints:["44.6808511 21.7021277 47.6595745 21.7021277 47.2340426 38.2978723 47.6595745 64.6808511 38.2978723 53.1914894 35.3191489 40.8510638 31.0638298 36.5957447 39.1489362 33.1914894 43.8297872 27.2340426","52.3404255 21.7021277 55.7446809 21.7021277 56.5957447 27.2340426 60.8510638 32.7659574 68.9361702 36.5957447 64.6808511 40.4255319 61.7021277 53.1914894 52.3404255 64.6808511 53.1914894 38.2978723"]},{muscle:e.BACK_DELTOIDS,svgPoints:["29.3617021 37.0212766 22.9787234 39.1489362 17.4468085 44.2553191 18.2978723 53.6170213 24.2553191 49.3617021 27.2340426 46.3829787","71.0638298 37.0212766 78.2978723 39.5744681 82.5531915 44.6808511 81.7021277 53.6170213 74.893617 48.9361702 72.3404255 45.106383"]},{muscle:e.UPPER_BACK,svgPoints:["31.0638298 38.7234043 28.0851064 48.9361702 28.5106383 55.3191489 34.0425532 75.3191489 47.2340426 71.0638298 47.2340426 66.3829787 36.5957447 54.0425532 33.6170213 41.2765957","68.9361702 38.7234043 71.9148936 49.3617021 71.4893617 56.1702128 65.9574468 75.3191489 52.7659574 71.0638298 52.7659574 66.3829787 63.4042553 54.4680851 66.3829787 41.7021277"]},{muscle:e.TRICEPS,svgPoints:["26.8085106 49.787234 17.8723404 55.7446809 14.4680851 72.3404255 16.5957447 81.7021277 21.7021277 63.8297872 26.8085106 55.7446809","73.6170213 50.212766 82.1276596 55.7446809 85.9574468 73.1914894 83.4042553 82.1276596 77.8723404 62.9787234 73.1914894 55.7446809","26.8085106 58.2978723 26.8085106 68.5106383 22.9787234 75.3191489 19.1489362 77.4468085 22.5531915 65.5319149","72.7659574 58.2978723 77.0212766 64.6808511 80.4255319 77.4468085 76.5957447 75.3191489 72.7659574 68.9361702"]},{muscle:e.LOWER_BACK,svgPoints:["47.6595745 72.7659574 34.4680851 77.0212766 35.3191489 83.4042553 49.3617021 102.12766 46.8085106 82.9787234","52.3404255 72.7659574 65.5319149 77.0212766 64.6808511 83.4042553 50.6382979 102.12766 53.1914894 83.8297872"]},{muscle:e.FOREARM,svgPoints:["86.3829787 75.7446809 91.0638298 83.4042553 93.1914894 94.0425532 100 106.382979 96.1702128 104.255319 88.0851064 89.3617021 84.2553191 83.8297872","13.6170213 75.7446809 8.93617021 83.8297872 6.80851064 93.6170213 0 106.382979 3.82978723 104.255319 12.3404255 88.5106383 15.7446809 82.9787234","81.2765957 79.5744681 77.4468085 77.8723404 79.1489362 84.6808511 91.0638298 103.829787 93.1914894 108.93617 94.4680851 104.680851","18.7234043 79.5744681 22.1276596 77.8723404 20.8510638 84.2553191 9.36170213 102.978723 6.80851064 108.510638 5.10638298 104.680851"]},{muscle:e.GLUTEAL,svgPoints:["44.6808511 99.5744681 30.212766 108.510638 29.787234 118.723404 31.4893617 125.957447 47.2340426 121.276596 49.3617021 114.893617","55.3191489 99.1489362 51.0638298 114.468085 52.3404255 120.851064 68.0851064 125.957447 69.787234 119.148936 69.3617021 108.510638"]},{muscle:e.ABDUCTOR,svgPoints:["48.0851064 122.978723 44.6808511 122.978723 41.2765957 125.531915 45.106383 144.255319 48.5106383 135.744681 48.9361702 129.361702","51.9148936 122.553191 55.7446809 123.404255 59.1489362 125.957447 54.893617 144.255319 51.9148936 136.170213 51.0638298 129.361702"]},{muscle:e.HAMSTRING,svgPoints:["28.9361702 122.12766 31.0638298 129.361702 36.5957447 125.957447 35.3191489 135.319149 34.4680851 150.212766 29.3617021 158.297872 28.9361702 146.808511 27.6595745 141.276596 27.2340426 131.489362","71.4893617 121.702128 69.3617021 128.93617 63.8297872 125.957447 65.5319149 136.595745 66.3829787 150.212766 71.0638298 158.297872 71.4893617 147.659574 72.7659574 142.12766 73.6170213 131.914894","38.7234043 125.531915 44.2553191 145.957447 40.4255319 166.808511 36.1702128 152.765957 37.0212766 135.319149","61.7021277 125.531915 63.4042553 136.170213 64.2553191 153.191489 60 166.808511 56.1702128 146.382979"]},{muscle:e.KNEES,svgPoints:["34.4680851 153.191489 31.0638298 159.148936 33.6170213 166.382979 37.4468085 162.553191","66.3829787 153.617021 62.9787234 162.978723 66.8085106 166.382979 69.3617021 159.148936"]},{muscle:e.CALVES,svgPoints:["29.3617021 160.425532 28.5106383 167.234043 24.6808511 179.574468 23.8297872 192.765957 25.5319149 197.021277 28.5106383 193.191489 29.787234 180 31.9148936 171.06383 31.9148936 166.808511","37.4468085 165.106383 35.3191489 167.659574 33.1914894 171.914894 31.0638298 180.425532 30.212766 191.914894 34.0425532 200 38.7234043 190.638298 39.1489362 168.93617","62.9787234 165.106383 61.2765957 168.510638 61.7021277 190.638298 66.3829787 199.574468 70.6382979 191.914894 68.9361702 179.574468 66.8085106 170.212766","70.6382979 160.425532 72.3404255 168.510638 75.7446809 179.148936 76.5957447 192.765957 74.4680851 196.595745 72.3404255 193.617021 70.6382979 179.574468 68.0851064 168.085106"]},{muscle:e.LEFT_SOLEUS,svgPoints:["28.5106383 195.744681 30.212766 195.744681 33.6170213 201.702128 30.6382979 220 28.5106383 213.617021 26.8085106 198.297872"]},{muscle:e.RIGHT_SOLEUS,svgPoints:["69.787234 195.744681 71.9148936 195.744681 73.6170213 198.297872 71.9148936 213.191489 70.212766 219.574468 67.2340426 202.12766"]}],v={trapezius:{exercises:[],frequency:0},"upper-back":{exercises:[],frequency:0},"lower-back":{exercises:[],frequency:0},chest:{exercises:[],frequency:0},biceps:{exercises:[],frequency:0},triceps:{exercises:[],frequency:0},forearm:{exercises:[],frequency:0},"back-deltoids":{exercises:[],frequency:0},"front-deltoids":{exercises:[],frequency:0},abs:{exercises:[],frequency:0},obliques:{exercises:[],frequency:0},adductor:{exercises:[],frequency:0},hamstring:{exercises:[],frequency:0},quadriceps:{exercises:[],frequency:0},abductors:{exercises:[],frequency:0},calves:{exercises:[],frequency:0},gluteal:{exercises:[],frequency:0},head:{exercises:[],frequency:0},neck:{exercises:[],frequency:0},knees:{exercises:[],frequency:0},"left-soleus":{exercises:[],frequency:0},"right-soleus":{exercises:[],frequency:0}},L={trapezius:e.UPPER_BACK,"upper trapezius":e.UPPER_BACK,rhomboids:e.UPPER_BACK,"levator scapulae":e.UPPER_BACK,"erector spinae":e.LOWER_BACK,"pectoralis major":e.CHEST,"rectus abdominis":e.ABS,"transverse abdominis":e.ABS,obliques:e.OBLIQUES,"serratus anterior":e.ABS,"anterior deltoids":e.FRONT_DELTOIDS,"medial deltoids":e.FRONT_DELTOIDS,"lateral deltoids":e.FRONT_DELTOIDS,"posterior deltoids":e.BACK_DELTOIDS,infraspinatus:e.BACK_DELTOIDS,"teres minor":e.BACK_DELTOIDS,"teres major":e.BACK_DELTOIDS,supraspinatus:e.BACK_DELTOIDS,subscapularis:e.BACK_DELTOIDS,"biceps brachii":e.BICEPS,brachialis:e.BICEPS,brachioradialis:e.BICEPS,"triceps brachii":e.TRICEPS,"flexor carpi radialis":e.FOREARM,anconeus:e.FOREARM,"gluteus maximus":e.GLUTEAL,"gluteus medius":e.GLUTEAL,"gluteus minimus":e.GLUTEAL,"rectus femoris":e.QUADRICEPS,"quadriceps femoris":e.QUADRICEPS,"vastus medialis":e.QUADRICEPS,"biceps femoris":e.HAMSTRING,"adductor magnus":e.ABDUCTOR,"tensor fasciae latae":e.ABDUCTORS,abductors:e.ABDUCTORS,gastrocnemius:e.CALVES,soleus:e.CALVES,"tibialis anterior":e.CALVES,"tibialis posterior":e.CALVES,"extensor hallucis longus":e.CALVES,"extensor digitorum longus":e.CALVES},R="#B6BDC3",D=["#81b1d9","#277abf"],O=d.ANTERIOR,b=(r,s)=>r==null?s:r,C=new Set(Object.values(e)),g=r=>{if(C.has(r))return r;if(typeof r!="string")return;const s=r.trim().toLowerCase();if(!s)return;const t=L[s];if(t)return t;if(C.has(s))return s},I=r=>g(r),B=(r,s,t)=>{var n;const i=(n=r[t])==null?void 0:n.frequency;if(!(i==null||i===0))return s[Math.min(s.length-1,i-1)]},_=r=>r.reduce((s,t)=>{for(const i of t.muscles){const n=g(i);n&&(s[n].exercises=[...s[n].exercises,t.name],s[n].frequency+=t.frequency||1)}return s},JSON.parse(JSON.stringify(v))),f="http://www.w3.org/2000/svg",c="rbh-wrapper",h=r=>r.replace(/[A-Z]/g,s=>`-${s.toLowerCase()}`).replace(/^ms-/,"-ms-"),S=(r,s)=>{if(r.removeAttribute("style"),!!s)for(const[t,i]of Object.entries(s))i!=null&&r.style.setProperty(h(t),String(i))},m=(r,s)=>{for(;r.firstChild;)r.removeChild(r.firstChild);for(const t of s)r.appendChild(t)},U=(r={})=>{var s,t,i,n,l;return{bodyColor:(s=r.bodyColor)!=null?s:R,data:(t=r.data)!=null?t:[],highlightedColors:r.highlightedColors?[...r.highlightedColors]:[...D],onClick:r.onClick,container:(i=r.container)!=null?i:null,wrapperClassName:(n=r.wrapperClassName)!=null?n:c,style:r.style,svgStyle:r.svgStyle,type:(l=r.type)!=null?l:O}},N=r=>r===d.ANTERIOR?P:T,q=(r,s,t,i,n)=>{const l=document.createElementNS(f,"polygon");return l.setAttribute("points",s.trim()),l.style.cursor="pointer",l.style.fill=t,i&&n&&l.addEventListener("click",()=>{i({muscle:r,data:n[r]})}),l},A=r=>{const s=U(r),t=document.createElement("div");t.className=s.wrapperClassName||c;const i=document.createElementNS(f,"svg");i.classList.add("rbh"),i.setAttribute("width","100%"),i.setAttribute("height","100%"),i.setAttribute("viewBox","0 0 100 200");const n=()=>{const o=_([...s.data]),y=N(s.type).flatMap(u=>u.svgPoints.map(p=>q(u.muscle,p,b(B(o,s.highlightedColors,u.muscle),s.bodyColor),s.onClick,o)));m(i,y)},l=()=>{s.container&&t.parentElement!==s.container&&s.container.appendChild(t)},E=()=>{S(t,s.style),S(i,s.svgStyle)};return t.appendChild(i),E(),n(),l(),{element:t,update:o=>{var a;o&&(o.bodyColor!==void 0&&(s.bodyColor=o.bodyColor),o.data!==void 0&&(s.data=o.data),o.highlightedColors!==void 0&&(s.highlightedColors=o.highlightedColors?[...o.highlightedColors]:[]),o.onClick!==void 0&&(s.onClick=o.onClick),o.container!==void 0&&(s.container=o.container,s.container?l():t.parentNode&&t.parentNode.removeChild(t)),o.wrapperClassName!==void 0&&(s.wrapperClassName=(a=o.wrapperClassName)!=null?a:c,t.className=s.wrapperClassName||c),o.style!==void 0&&(s.style=o.style),o.svgStyle!==void 0&&(s.svgStyle=o.svgStyle),o.type!==void 0&&(s.type=o.type),E(),n(),s.container&&l())},destroy:()=>{m(i,[]),t.parentNode&&t.parentNode.removeChild(t)}}};return {ModelType:d,MuscleType:e,createBodyHighlighter:A,normalizeMuscle:I}; })();
+
+
+
 function buildMuscleSVG(primary=[], secondary=[]){
   const NAME_MAP = {
-    'Quadriceps':'quads','Fessiers':'glutes','Ischio-jambiers':'hams',
+    'Quadriceps':'quadriceps','Fessiers':'gluteal','Ischio-jambiers':'hamstring',
     'Mollets':'calves','Gastrocnémien':'calves','Soléaire':'calves',
     'Pectoraux':'chest','Pectoraux supérieurs':'chest',
-    'Grand dorsal':'lats','Deltoïdes':'delts','Deltoïdes latéraux':'delts',
-    'Deltoïdes antérieurs':'delts','Deltoïdes postérieurs':'rdelts',
-    'Trapèze':'traps','Biceps':'biceps','Biceps brachial':'biceps',
-    'Triceps':'triceps','Avant-bras':'forearms','Brachioradialis':'forearms',
-    'Abdominaux':'abs','Core':'abs','Rhomboïdes':'rhomboids','Bas du dos':'lowerback',
+    'Grand dorsal':'upper-back','Deltoïdes':'front-deltoids','Deltoïdes latéraux':'front-deltoids',
+    'Deltoïdes antérieurs':'front-deltoids','Deltoïdes postérieurs':'back-deltoids',
+    'Trapèze':'trapezius','Biceps':'biceps','Biceps brachial':'biceps',
+    'Triceps':'triceps','Avant-bras':'forearm','Brachioradialis':'forearm',
+    'Abdominaux':'abs','Core':'abs','Rhomboïdes':'upper-back','Bas du dos':'lower-back',
   };
+
   const P = new Set((primary||[]).map(m=>NAME_MAP[m]).filter(Boolean));
   const S = new Set((secondary||[]).map(m=>NAME_MAP[m]).filter(Boolean));
-  const c  = id => P.has(id)?'#c8ff00':S.has(id)?'ff6b00':'1a1a2e';
-  const fill = id => P.has(id)?'#c8ff00':S.has(id)?'#ff6b00':'#1e1e32';
-  const str  = id => P.has(id)?'#a8df00':S.has(id)?'#dd5500':'#2e2e4a';
-  const glow = id => P.has(id)?'drop-shadow(0 0 7px #c8ff00) drop-shadow(0 0 3px #c8ff00)':S.has(id)?'drop-shadow(0 0 5px #ff6b00)':'none';
-  const op   = id => P.has(id)?'1':S.has(id)?'0.9':'0.55';
 
-  const front = `<svg viewBox="0 0 160 380" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <radialGradient id="hgrad" cx="50%" cy="40%" r="55%">
-      <stop offset="0%" stop-color="#30304a"/>
-      <stop offset="100%" stop-color="#111120"/>
-    </radialGradient>
-  </defs>
+  // Build data for body-highlighter
+  const data = [];
+  P.forEach(muscle => data.push({name: muscle, muscles: [muscle], frequency: 2}));
+  S.forEach(muscle => { if(!P.has(muscle)) data.push({name: muscle, muscles: [muscle], frequency: 1}); });
 
-  <!-- === SILHOUETTE BASE === -->
-  <!-- Head -->
-  <ellipse cx="80" cy="24" rx="18" ry="22" fill="#111120" stroke="#252540" stroke-width="1.5"/>
-  <!-- Neck -->
-  <path d="M71,43 Q71,56 80,58 Q89,56 89,43 L86,41 L74,41Z" fill="#111120" stroke="#252540" stroke-width="1"/>
+  const uid = 'bh'+Math.random().toString(36).substr(2,5);
 
-  <!-- Shoulders width bar -->
-  <path d="M24,74 Q80,64 136,74" stroke="#252540" stroke-width="1" fill="none"/>
+  setTimeout(() => {
+    const frontEl = document.getElementById(uid+'F');
+    const backEl = document.getElementById(uid+'B');
+    if(!frontEl || !backEl || !BodyHL) return;
 
-  <!-- Main torso silhouette -->
-  <path d="M36,72 C24,78 18,94 18,112 C18,130 22,148 28,162 C34,174 42,180 52,184 C60,187 80,188 80,188 C80,188 100,187 108,184 C118,180 126,174 132,162 C138,148 142,130 142,112 C142,94 136,78 124,72 C112,66 96,62 80,62 C64,62 48,66 36,72Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
-
-  <!-- Hip / pelvis -->
-  <path d="M52,184 Q66,196 80,197 Q94,196 108,184 C108,196 102,208 80,210 C58,208 52,196 52,184Z" fill="#111120" stroke="#252540" stroke-width="1"/>
-
-  <!-- Left leg silhouette -->
-  <path d="M52,196 C48,216 46,238 46,258 C46,278 48,296 50,308 C52,318 56,324 62,326 C68,328 73,324 76,316 C79,304 80,284 80,264 C80,244 78,224 74,206 C70,198 62,194 56,195Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
-  <!-- Right leg silhouette -->
-  <path d="M108,196 C112,216 114,238 114,258 C114,278 112,296 110,308 C108,318 104,324 98,326 C92,328 87,324 84,316 C81,304 80,284 80,264 C80,244 82,224 86,206 C90,198 98,194 104,195Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
-
-  <!-- Left arm silhouette -->
-  <path d="M24,76 C14,88 10,106 12,124 C14,138 20,148 28,152 C34,154 40,150 43,142 C46,132 44,114 40,98 C37,86 32,76 26,74Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
-  <!-- Right arm silhouette -->
-  <path d="M136,76 C146,88 150,106 148,124 C146,138 140,148 132,152 C126,154 120,150 117,142 C114,132 116,114 120,98 C123,86 128,76 134,74Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
-
-  <!-- Left forearm -->
-  <path d="M12,126 C10,142 12,160 16,172 C20,180 28,182 34,178 C40,172 42,158 40,144 C38,132 32,124 26,124Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
-  <!-- Right forearm -->
-  <path d="M148,126 C150,142 148,160 144,172 C140,180 132,182 126,178 C120,172 118,158 120,144 C122,132 128,124 134,124Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
-
-  <!-- Left hand -->
-  <ellipse cx="24" cy="184" rx="9" ry="12" fill="#111120" stroke="#252540" stroke-width="1"/>
-  <!-- Right hand -->
-  <ellipse cx="136" cy="184" rx="9" ry="12" fill="#111120" stroke="#252540" stroke-width="1"/>
-
-  <!-- Left foot -->
-  <ellipse cx="58" cy="332" rx="12" ry="6" fill="#111120" stroke="#252540" stroke-width="1"/>
-  <!-- Right foot -->
-  <ellipse cx="102" cy="332" rx="12" ry="6" fill="#111120" stroke="#252540" stroke-width="1"/>
-
-  <!-- === MUSCLE GROUPS FRONT === -->
-
-  <!-- TRAPS -->
-  <path d="M71,56 Q60,58 46,68 Q60,74 80,76 Q100,74 114,68 Q100,58 89,56 Q80,60 71,56Z"
-    fill="${fill('traps')}" opacity="${op('traps')}" stroke="${str('traps')}" stroke-width="0.8" style="filter:${glow('traps')}"/>
-
-  <!-- DELTS LEFT -->
-  <path d="M22,74 C14,80 12,92 14,104 C16,114 22,120 30,118 C38,116 42,106 40,96 C38,86 32,74 26,72Z"
-    fill="${fill('delts')}" opacity="${op('delts')}" stroke="${str('delts')}" stroke-width="0.8" style="filter:${glow('delts')}"/>
-  <!-- DELTS RIGHT -->
-  <path d="M138,74 C146,80 148,92 146,104 C144,114 138,120 130,118 C122,116 118,106 120,96 C122,86 128,74 134,72Z"
-    fill="${fill('delts')}" opacity="${op('delts')}" stroke="${str('delts')}" stroke-width="0.8" style="filter:${glow('delts')}"/>
-
-  <!-- CHEST LEFT -->
-  <path d="M36,74 C28,80 26,92 28,106 C30,116 38,122 50,124 C62,126 76,124 80,122 L80,76 C66,72 50,70 36,74Z"
-    fill="${fill('chest')}" opacity="${op('chest')}" stroke="${str('chest')}" stroke-width="0.8" style="filter:${glow('chest')}"/>
-  <!-- CHEST RIGHT -->
-  <path d="M124,74 C132,80 134,92 132,106 C130,116 122,122 110,124 C98,126 84,124 80,122 L80,76 C94,72 110,70 124,74Z"
-    fill="${fill('chest')}" opacity="${op('chest')}" stroke="${str('chest')}" stroke-width="0.8" style="filter:${glow('chest')}"/>
-  <!-- Chest divider -->
-  <path d="M80,74 L80,122" stroke="#0a0a18" stroke-width="2"/>
-  <!-- Chest bottom crease -->
-  <path d="M34,118 Q80,128 126,118" stroke="#0a0a18" stroke-width="1.5" fill="none"/>
-
-  <!-- LATS (visible front sides) -->
-  <path d="M22,100 C18,116 18,134 22,150 C26,162 32,170 36,174 C30,162 26,148 24,132 C22,116 22,102 22,100Z"
-    fill="${fill('lats')}" opacity="${op('lats')}" stroke="${str('lats')}" stroke-width="0.8" style="filter:${glow('lats')}"/>
-  <path d="M138,100 C142,116 142,134 138,150 C134,162 128,170 124,174 C130,162 134,148 136,132 C138,116 138,102 138,100Z"
-    fill="${fill('lats')}" opacity="${op('lats')}" stroke="${str('lats')}" stroke-width="0.8" style="filter:${glow('lats')}"/>
-
-  <!-- ABS 6-pack -->
-  <path d="M70,126 Q74,124 80,124 L80,136 Q74,137 70,136Z" fill="${fill('abs')}" opacity="${op('abs')}" stroke="${str('abs')}" stroke-width="0.8" rx="3" style="filter:${glow('abs')}"/>
-  <path d="M80,124 Q86,124 90,126 L90,136 Q86,137 80,136Z" fill="${fill('abs')}" opacity="${op('abs')}" stroke="${str('abs')}" stroke-width="0.8" style="filter:${glow('abs')}"/>
-  <path d="M70,138 Q74,137 80,137 L80,149 Q74,150 70,149Z" fill="${fill('abs')}" opacity="${op('abs')}" stroke="${str('abs')}" stroke-width="0.8" style="filter:${glow('abs')}"/>
-  <path d="M80,137 Q86,137 90,138 L90,149 Q86,150 80,149Z" fill="${fill('abs')}" opacity="${op('abs')}" stroke="${str('abs')}" stroke-width="0.8" style="filter:${glow('abs')}"/>
-  <path d="M70,151 Q74,150 80,150 L80,162 Q74,163 70,162Z" fill="${fill('abs')}" opacity="${op('abs')}" stroke="${str('abs')}" stroke-width="0.8" style="filter:${glow('abs')}"/>
-  <path d="M80,150 Q86,150 90,151 L90,162 Q86,163 80,162Z" fill="${fill('abs')}" opacity="${op('abs')}" stroke="${str('abs')}" stroke-width="0.8" style="filter:${glow('abs')}"/>
-  <path d="M80,122 L80,164" stroke="#0a0a18" stroke-width="1.5"/>
-
-  <!-- BICEPS LEFT -->
-  <path d="M14,102 C10,114 10,130 14,142 C18,150 26,152 32,148 C38,142 40,128 38,114 C36,102 30,94 24,94 C18,94 14,98 14,102Z"
-    fill="${fill('biceps')}" opacity="${op('biceps')}" stroke="${str('biceps')}" stroke-width="0.8" style="filter:${glow('biceps')}"/>
-  <!-- BICEPS RIGHT -->
-  <path d="M146,102 C150,114 150,130 146,142 C142,150 134,152 128,148 C122,142 120,128 122,114 C124,102 130,94 136,94 C142,94 146,98 146,102Z"
-    fill="${fill('biceps')}" opacity="${op('biceps')}" stroke="${str('biceps')}" stroke-width="0.8" style="filter:${glow('biceps')}"/>
-
-  <!-- FOREARMS LEFT -->
-  <path d="M12,146 C10,160 12,174 16,182 C20,188 28,188 34,184 C40,178 42,164 40,150 C36,140 28,136 22,138Z"
-    fill="${fill('forearms')}" opacity="${op('forearms')}" stroke="${str('forearms')}" stroke-width="0.8" style="filter:${glow('forearms')}"/>
-  <!-- FOREARMS RIGHT -->
-  <path d="M148,146 C150,160 148,174 144,182 C140,188 132,188 126,184 C120,178 118,164 120,150 C124,140 132,136 138,138Z"
-    fill="${fill('forearms')}" opacity="${op('forearms')}" stroke="${str('forearms')}" stroke-width="0.8" style="filter:${glow('forearms')}"/>
-
-  <!-- QUADS LEFT (4 heads visible) -->
-  <path d="M50,200 C44,220 42,244 44,264 C46,282 50,298 56,308 C62,316 70,318 76,314 C80,308 80,290 80,268 C80,246 78,226 74,210 C70,200 62,196 56,196 C52,196 50,198 50,200Z"
-    fill="${fill('quads')}" opacity="${op('quads')}" stroke="${str('quads')}" stroke-width="0.8" style="filter:${glow('quads')}"/>
-  <!-- Inner quad line -->
-  <path d="M62,200 C60,224 60,250 62,274 C64,292 68,308 72,314" stroke="#0a0a18" stroke-width="1.2" fill="none"/>
-  <!-- QUADS RIGHT -->
-  <path d="M110,200 C116,220 118,244 116,264 C114,282 110,298 104,308 C98,316 90,318 84,314 C80,308 80,290 80,268 C80,246 82,226 86,210 C90,200 98,196 104,196 C108,196 110,198 110,200Z"
-    fill="${fill('quads')}" opacity="${op('quads')}" stroke="${str('quads')}" stroke-width="0.8" style="filter:${glow('quads')}"/>
-  <path d="M98,200 C100,224 100,250 98,274 C96,292 92,308 88,314" stroke="#0a0a18" stroke-width="1.2" fill="none"/>
-
-  <!-- KNEES -->
-  <ellipse cx="62" cy="316" rx="14" ry="9" fill="#111120" stroke="#252540" stroke-width="1"/>
-  <ellipse cx="98" cy="316" rx="14" ry="9" fill="#111120" stroke="#252540" stroke-width="1"/>
-
-  <!-- CALVES LEFT -->
-  <path d="M48,322 C44,336 44,350 47,360 C50,368 56,372 62,370 C68,368 72,360 72,350 C72,338 70,326 66,320Z"
-    fill="${fill('calves')}" opacity="${op('calves')}" stroke="${str('calves')}" stroke-width="0.8" style="filter:${glow('calves')}"/>
-  <!-- CALVES RIGHT -->
-  <path d="M112,322 C116,336 116,350 113,360 C110,368 104,372 98,370 C92,368 88,360 88,350 C88,338 90,326 94,320Z"
-    fill="${fill('calves')}" opacity="${op('calves')}" stroke="${str('calves')}" stroke-width="0.8" style="filter:${glow('calves')}"/>
-  </svg>`;
-
-  const back = `<svg viewBox="0 0 160 380" xmlns="http://www.w3.org/2000/svg">
-  <!-- === SILHOUETTE BASE BACK === -->
-  <ellipse cx="80" cy="24" rx="18" ry="22" fill="#111120" stroke="#252540" stroke-width="1.5"/>
-  <path d="M71,43 Q71,56 80,58 Q89,56 89,43 L86,41 L74,41Z" fill="#111120" stroke="#252540" stroke-width="1"/>
-  <path d="M36,72 C24,78 18,94 18,112 C18,130 22,148 28,162 C34,174 42,180 52,184 C60,187 80,188 80,188 C80,188 100,187 108,184 C118,180 126,174 132,162 C138,148 142,130 142,112 C142,94 136,78 124,72 C112,66 96,62 80,62 C64,62 48,66 36,72Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
-  <path d="M52,184 Q66,196 80,197 Q94,196 108,184 C108,196 102,208 80,210 C58,208 52,196 52,184Z" fill="#111120" stroke="#252540" stroke-width="1"/>
-  <path d="M52,196 C48,216 46,238 46,258 C46,278 48,296 50,308 C52,318 56,324 62,326 C68,328 73,324 76,316 C79,304 80,284 80,264 C80,244 78,224 74,206 C70,198 62,194 56,195Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
-  <path d="M108,196 C112,216 114,238 114,258 C114,278 112,296 110,308 C108,318 104,324 98,326 C92,328 87,324 84,316 C81,304 80,284 80,264 C80,244 82,224 86,206 C90,198 98,194 104,195Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
-  <path d="M24,76 C14,88 10,106 12,124 C14,138 20,148 28,152 C34,154 40,150 43,142 C46,132 44,114 40,98 C37,86 32,76 26,74Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
-  <path d="M136,76 C146,88 150,106 148,124 C146,138 140,148 132,152 C126,154 120,150 117,142 C114,132 116,114 120,98 C123,86 128,76 134,74Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
-  <path d="M12,126 C10,142 12,160 16,172 C20,180 28,182 34,178 C40,172 42,158 40,144 C38,132 32,124 26,124Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
-  <path d="M148,126 C150,142 148,160 144,172 C140,180 132,182 126,178 C120,172 118,158 120,144 C122,132 128,124 134,124Z" fill="#13132a" stroke="#252540" stroke-width="1"/>
-  <ellipse cx="24" cy="184" rx="9" ry="12" fill="#111120" stroke="#252540" stroke-width="1"/>
-  <ellipse cx="136" cy="184" rx="9" ry="12" fill="#111120" stroke="#252540" stroke-width="1"/>
-  <ellipse cx="58" cy="332" rx="12" ry="6" fill="#111120" stroke="#252540" stroke-width="1"/>
-  <ellipse cx="102" cy="332" rx="12" ry="6" fill="#111120" stroke="#252540" stroke-width="1"/>
-
-  <!-- === MUSCLE GROUPS BACK === -->
-
-  <!-- REAR DELTS LEFT -->
-  <path d="M22,74 C14,80 12,92 14,104 C16,114 22,120 30,118 C38,116 42,106 40,96 C38,86 32,74 26,72Z"
-    fill="${fill('rdelts')}" opacity="${op('rdelts')}" stroke="${str('rdelts')}" stroke-width="0.8" style="filter:${glow('rdelts')}"/>
-  <!-- REAR DELTS RIGHT -->
-  <path d="M138,74 C146,80 148,92 146,104 C144,114 138,120 130,118 C122,116 118,106 120,96 C122,86 128,74 134,72Z"
-    fill="${fill('rdelts')}" opacity="${op('rdelts')}" stroke="${str('rdelts')}" stroke-width="0.8" style="filter:${glow('rdelts')}"/>
-
-  <!-- TRAPS (large back traps) -->
-  <path d="M71,56 Q56,58 44,70 Q52,80 80,84 Q108,80 116,70 Q104,58 89,56 Q80,60 71,56Z"
-    fill="${fill('traps')}" opacity="${op('traps')}" stroke="${str('traps')}" stroke-width="0.8" style="filter:${glow('traps')}"/>
-
-  <!-- RHOMBOIDS / UPPER BACK -->
-  <path d="M44,84 Q62,80 80,80 Q98,80 116,84 Q116,104 108,112 Q94,118 80,118 Q66,118 52,112 Q44,104 44,84Z"
-    fill="${fill('rhomboids')}" opacity="${op('rhomboids')}" stroke="${str('rhomboids')}" stroke-width="0.8" style="filter:${glow('rhomboids')}"/>
-
-  <!-- LATS LEFT -->
-  <path d="M22,96 C18,112 18,132 22,150 C26,164 34,174 42,178 C36,168 30,154 26,138 C22,122 20,108 22,96Z"
-    fill="${fill('lats')}" opacity="${op('lats')}" stroke="${str('lats')}" stroke-width="0.8" style="filter:${glow('lats')}"/>
-  <!-- LATS RIGHT -->
-  <path d="M138,96 C142,112 142,132 138,150 C134,164 126,174 118,178 C124,168 130,154 134,138 C138,122 140,108 138,96Z"
-    fill="${fill('lats')}" opacity="${op('lats')}" stroke="${str('lats')}" stroke-width="0.8" style="filter:${glow('lats')}"/>
-
-  <!-- LOWER BACK -->
-  <path d="M54,144 Q66,138 80,138 Q94,138 106,144 Q108,162 104,172 Q94,182 80,184 Q66,182 56,172 Q52,162 54,144Z"
-    fill="${fill('lowerback')}" opacity="${op('lowerback')}" stroke="${str('lowerback')}" stroke-width="0.8" style="filter:${glow('lowerback')}"/>
-  <!-- Spine -->
-  <line x1="80" y1="58" x2="80" y2="184" stroke="#0a0a18" stroke-width="2"/>
-
-  <!-- TRICEPS LEFT -->
-  <path d="M14,102 C10,114 10,130 14,142 C18,150 26,152 32,148 C38,142 40,128 38,114 C36,102 30,94 24,94 C18,94 14,98 14,102Z"
-    fill="${fill('triceps')}" opacity="${op('triceps')}" stroke="${str('triceps')}" stroke-width="0.8" style="filter:${glow('triceps')}"/>
-  <!-- TRICEPS RIGHT -->
-  <path d="M146,102 C150,114 150,130 146,142 C142,150 134,152 128,148 C122,142 120,128 122,114 C124,102 130,94 136,94 C142,94 146,98 146,102Z"
-    fill="${fill('triceps')}" opacity="${op('triceps')}" stroke="${str('triceps')}" stroke-width="0.8" style="filter:${glow('triceps')}"/>
-
-  <!-- FOREARMS BACK LEFT -->
-  <path d="M12,146 C10,160 12,174 16,182 C20,188 28,188 34,184 C40,178 42,164 40,150 C36,140 28,136 22,138Z"
-    fill="${fill('forearms')}" opacity="${op('forearms')}" stroke="${str('forearms')}" stroke-width="0.8" style="filter:${glow('forearms')}"/>
-  <!-- FOREARMS BACK RIGHT -->
-  <path d="M148,146 C150,160 148,174 144,182 C140,188 132,188 126,184 C120,178 118,164 120,150 C124,140 132,136 138,138Z"
-    fill="${fill('forearms')}" opacity="${op('forearms')}" stroke="${str('forearms')}" stroke-width="0.8" style="filter:${glow('forearms')}"/>
-
-  <!-- GLUTES -->
-  <path d="M50,196 C46,210 46,226 50,236 C54,244 62,248 72,246 C78,244 80,238 80,232 C80,220 76,206 70,198 C64,192 56,192 50,196Z"
-    fill="${fill('glutes')}" opacity="${op('glutes')}" stroke="${str('glutes')}" stroke-width="0.8" style="filter:${glow('glutes')}"/>
-  <path d="M110,196 C114,210 114,226 110,236 C106,244 98,248 88,246 C82,244 80,238 80,232 C80,220 84,206 90,198 C96,192 104,192 110,196Z"
-    fill="${fill('glutes')}" opacity="${op('glutes')}" stroke="${str('glutes')}" stroke-width="0.8" style="filter:${glow('glutes')}"/>
-  <line x1="80" y1="192" x2="80" y2="246" stroke="#0a0a18" stroke-width="1.5"/>
-
-  <!-- HAMSTRINGS LEFT -->
-  <path d="M50,244 C46,260 44,278 46,296 C48,310 54,320 62,322 C70,322 76,314 78,302 C80,288 80,268 78,252 C76,238 70,230 62,230 C56,230 52,236 50,244Z"
-    fill="${fill('hams')}" opacity="${op('hams')}" stroke="${str('hams')}" stroke-width="0.8" style="filter:${glow('hams')}"/>
-  <!-- HAMSTRINGS RIGHT -->
-  <path d="M110,244 C114,260 116,278 114,296 C112,310 106,320 98,322 C90,322 84,314 82,302 C80,288 80,268 82,252 C84,238 90,230 98,230 C104,230 108,236 110,244Z"
-    fill="${fill('hams')}" opacity="${op('hams')}" stroke="${str('hams')}" stroke-width="0.8" style="filter:${glow('hams')}"/>
-
-  <!-- KNEES BACK -->
-  <ellipse cx="62" cy="322" rx="14" ry="9" fill="#111120" stroke="#252540" stroke-width="1"/>
-  <ellipse cx="98" cy="322" rx="14" ry="9" fill="#111120" stroke="#252540" stroke-width="1"/>
-
-  <!-- CALVES BACK LEFT -->
-  <path d="M46,330 C42,344 43,358 47,366 C51,374 59,376 65,372 C71,366 73,352 70,338 C68,328 62,322 56,324Z"
-    fill="${fill('calves')}" opacity="${op('calves')}" stroke="${str('calves')}" stroke-width="0.8" style="filter:${glow('calves')}"/>
-  <!-- CALVES BACK RIGHT -->
-  <path d="M114,330 C118,344 117,358 113,366 C109,374 101,376 95,372 C89,366 87,352 90,338 C92,328 98,322 104,324Z"
-    fill="${fill('calves')}" opacity="${op('calves')}" stroke="${str('calves')}" stroke-width="0.8" style="filter:${glow('calves')}"/>
-  </svg>`;
+    try {
+      BodyHL.createBodyHighlighter({
+        container: frontEl,
+        data: data,
+        type: BodyHL.ModelType.ANTERIOR,
+        bodyColor: '#2a2a40',
+        highlightedColors: ['#ff6b00', '#c8ff00'],
+        svgStyle: {width:'100%', height:'auto'}
+      });
+      BodyHL.createBodyHighlighter({
+        container: backEl,
+        data: data,
+        type: BodyHL.ModelType.POSTERIOR,
+        bodyColor: '#2a2a40',
+        highlightedColors: ['#ff6b00', '#c8ff00'],
+        svgStyle: {width:'100%', height:'auto'}
+      });
+    } catch(e) { console.log('BH error:', e); }
+  }, 50);
 
   return `
     <div class="muscle-figures">
-      <div class="muscle-fig"><div class="muscle-fig-label">AVANT</div>${front}</div>
-      <div class="muscle-fig"><div class="muscle-fig-label">ARRIÈRE</div>${back}</div>
+      <div class="muscle-fig">
+        <div class="muscle-fig-label">AVANT</div>
+        <div id="${uid}F" style="width:85px;height:170px"></div>
+      </div>
+      <div class="muscle-fig">
+        <div class="muscle-fig-label">ARRIÈRE</div>
+        <div id="${uid}B" style="width:85px;height:170px"></div>
+      </div>
     </div>
     <div class="muscle-legend">
       ${primary.length?`<div class="muscle-legend-title p">● PRIMAIRES</div>${primary.map(m=>`<div class="muscle-legend-item"><span class="muscle-dot p"></span>${m}</div>`).join('')}`:''}
