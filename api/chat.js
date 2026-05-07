@@ -19,12 +19,18 @@ export default async function handler(req) {
     const body = await req.json();
     const { messages, system, image } = body;
 
-    // Build message content - support image if provided
-    let finalMessages = messages;
-    if (image && messages && messages.length > 0) {
-      const lastMsg = messages[messages.length - 1];
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      return new Response(JSON.stringify({ text: 'Clé API manquante dans Vercel.' }), {
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      });
+    }
+
+    let finalMessages = messages || [];
+    if (image && finalMessages.length > 0) {
+      const lastMsg = finalMessages[finalMessages.length - 1];
       finalMessages = [
-        ...messages.slice(0, -1),
+        ...finalMessages.slice(0, -1),
         {
           role: lastMsg.role,
           content: [
@@ -42,23 +48,34 @@ export default async function handler(req) {
       ];
     }
 
+    const payload = {
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 1024,
+      messages: finalMessages,
+    };
+    if (system) payload.system = system;
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 1024,
-        system: system || '',
-        messages: finalMessages,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = await response.json();
-    const text = data.content?.find(b => b.type === 'text')?.text || 'Erreur de réponse.';
+
+    if (!response.ok) {
+      return new Response(JSON.stringify({
+        text: `Erreur ${response.status}: ${data.error?.message || JSON.stringify(data)}`
+      }), {
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      });
+    }
+
+    const text = data.content?.find(b => b.type === 'text')?.text || 'Pas de réponse.';
 
     return new Response(JSON.stringify({ text }), {
       headers: {
@@ -66,13 +83,11 @@ export default async function handler(req) {
         'Access-Control-Allow-Origin': '*',
       },
     });
+
   } catch (err) {
-    return new Response(JSON.stringify({ text: 'Erreur de connexion au serveur.' }), {
+    return new Response(JSON.stringify({ text: `Erreur serveur: ${err.message}` }), {
       status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     });
   }
 }
