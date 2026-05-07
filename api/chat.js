@@ -49,7 +49,7 @@ export default async function handler(req) {
     }
 
     const payload = {
-      model: 'claude-3-haiku-20240307',
+      model: 'claude-3-5-haiku-20241022',
       max_tokens: 1024,
       messages: finalMessages,
     };
